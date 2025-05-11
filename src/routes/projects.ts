@@ -13,6 +13,8 @@ app.use(cors({
 
 // 🔹 GET: 全プロジェクト取得
 app.get('/projects', async (c) => {
+    const page = Number(c.req.query("page") ?? 1); // デフォルトは1ページ目
+    const limit = Number(c.req.query("limit") ?? 20); // 1回のAPI取得で20件
     try {
         const result = await pool.query(`
           SELECT 
@@ -31,7 +33,13 @@ app.get('/projects', async (c) => {
           LEFT JOIN utilization_rates ur ON p.pjCd = ur.pjCd
           LEFT JOIN work_hours wh ON p.pjCd = wh.pjCd
           LEFT JOIN project_details pd ON p.pjCd = pd.pjCd
+          ORDER BY p.pjCd
+          LIMIT ${limit} OFFSET ${(page - 1) * limit}
         `);
+
+        if (!result.rows.length) {
+            return c.json({ error: "データが見つかりません" }, 404);
+        }
 
         // 整形
         const projects: Project[] = result.rows.map(row => (
@@ -71,7 +79,12 @@ app.get('/projects', async (c) => {
         ));
 
         // レスポンス
-        return c.json(projects);
+        return c.json({
+            data: projects,
+            total: projects.length,
+            page,
+            limit,
+        });
     } catch (error) {
         console.error(error);
         return c.json({ error: 'データ取得に失敗しました' }, 500);
